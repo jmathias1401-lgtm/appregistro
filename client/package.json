@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:vite": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,4 +22,4 @@
     "typescript": "^5.2.2",
     "vite": "^5.0.0"
   }
-}
+  }

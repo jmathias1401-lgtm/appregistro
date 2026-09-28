@@ -68,6 +68,43 @@ input[type="file"] {
   font-weight: 700;
 }
 
+.session-controls {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.session-user,
+.logout-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.session-user {
+  font-size: 13px;
+  font-weight: 700;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-button {
+  background: rgb(255 255 255 / 14%);
+  border: 1px solid rgb(255 255 255 / 32%);
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 6px 9px;
+}
+
+.logout-button:hover {
+  background: rgb(255 255 255 / 24%);
+}
+
 .icon-button {
   align-items: center;
   background: transparent;
@@ -286,6 +323,30 @@ textarea.form-control {
   width: 100%;
 }
 
+.search-controls {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+}
+
+.search-controls select {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  min-height: 44px;
+  padding: 9px 10px;
+}
+
+.search-controls input {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-button {
+  min-width: 100px;
+}
+
 .search-bar input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgb(20 121 238 / 18%);
@@ -298,6 +359,50 @@ textarea.form-control {
   color: var(--muted);
   padding: 28px 16px;
   text-align: center;
+}
+
+.auth-page-shell {
+  opacity: .45;
+}
+
+.auth-modal {
+  align-items: center;
+  background: rgb(18 35 52 / 58%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 50;
+}
+
+.auth-dialog {
+  margin: 0;
+  max-width: 430px;
+  width: 100%;
+}
+
+.auth-dialog .form-card {
+  box-shadow: 0 18px 48px rgb(10 35 60 / 22%);
+}
+
+.auth-dialog-header {
+  margin-bottom: 20px;
+}
+
+.auth-dialog-header h2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.auth-kicker {
+  color: var(--primary-dark);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  margin-bottom: 5px;
+  text-transform: uppercase;
 }
 
 .product-card {
@@ -419,8 +524,34 @@ textarea.form-control {
     white-space: nowrap;
   }
 
+  .session-controls {
+    gap: 5px;
+  }
+
+  .session-user {
+    max-width: 82px;
+  }
+
+  .logout-button {
+    padding: 6px;
+  }
+
+  .logout-button span {
+    display: none;
+  }
+
   .form-card {
     padding: 14px 12px;
+  }
+
+  .search-controls {
+    flex-wrap: wrap;
+  }
+
+  .search-controls select,
+  .search-controls input,
+  .search-button {
+    flex: 1 1 100%;
   }
 
   .field-grid-three,

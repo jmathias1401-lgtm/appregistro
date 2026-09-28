@@ -1,42 +1,71 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, List, Package, X, Camera, ChevronLeft } from 'lucide-react';
+import { PlusCircle, List, Package, X, Camera, ChevronLeft, LogOut, UserCircle } from 'lucide-react';
 import axios from 'axios';
 
-const API_ORIGIN = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:3001`;
-const API_URL = `${API_ORIGIN}/api`;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_URL = API_BASE_URL ? `${API_BASE_URL}/api` : '/api';
+const IMAGE_BASE_URL = (import.meta.env.VITE_IMAGE_BASE_URL || 'http://localhost:4300/assets/img/imagenes' || 'http://192.168.1.63:4300/assets/img/imagenes'||'http://192.168.1.63:3000/assets/img/imagenes').replace(/\/$/, '');
 
 interface Catalogo {
   id: number;
   nombre: string;
 }
 
-interface Product {
+interface Producto {
   idproducto: number;
   nombre: string;
   codigoproducto: string;
   stock: number;
   precioventa: number;
-  nombrelaboratorio: string;
+  nombrelaboratorio?: string;
+  laboratorio?: { nombrelaboratorio?: string };
   imagen_path: string | null;
 }
 
-function App() {
-  const [view, setView] = useState<'list' | 'create'>('list');
-  const [catalogos, setCatalogos] = useState<{
-    unidades: Catalogo[],
-    presentaciones: Catalogo[],
-    laboratorios: Catalogo[]
-  }>({ unidades: [], presentaciones: [], laboratorios: [] });
-  
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+interface LoginCreds {
+  usuario: string;
+  password: string;
+}
 
-  // Estado del formulario
-  const [formData, setFormData] = useState({
+interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+interface User {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+}
+
+interface ProductFormData {
+  nombre: string;
+  codbarra: string;
+  vencimiento: string;
+  ubicacion: string;
+  idunidad: string;
+  idpresentacion: string;
+  idlaboratorio: string;
+  composicion: string;
+  precioventa: string;
+  precioblister: string;
+  preciocaja: string;
+  stock: string;
+}
+
+const createEmptyFormData = (): ProductFormData => {
+  const defaultExpirationDate = new Date();
+  defaultExpirationDate.setFullYear(defaultExpirationDate.getFullYear() + 1);
+
+  return {
     nombre: '',
     codbarra: '',
-    vencimiento: '',
+    vencimiento: [
+      defaultExpirationDate.getFullYear(),
+      String(defaultExpirationDate.getMonth() + 1).padStart(2, '0'),
+      String(defaultExpirationDate.getDate()).padStart(2, '0')
+    ].join('-'),
     ubicacion: '',
     idunidad: '',
     idpresentacion: '',
@@ -46,29 +75,151 @@ function App() {
     precioblister: '0',
     preciocaja: '0',
     stock: '0'
-  });
+  };
+};
+
+function App() {
+  const [view, setView] = useState<'list' | 'create'>('list');
+  const [catalogos, setCatalogos] = useState<{
+    unidades: Catalogo[],
+    presentaciones: Catalogo[],
+    laboratorios: Catalogo[]
+  }>({ unidades: [], presentaciones: [], laboratorios: [] });
+  
+  const [products, setProducts] = useState<Producto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchMode, setSearchMode] = useState<'nombre' | 'codbarra'>('nombre');
+  const [token, setToken] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authForm, setAuthForm] = useState({ nombre: '', usuario: '', password: '' });
+  const [formData, setFormData] = useState<ProductFormData>(createEmptyFormData);
   const [image, setImage] = useState<File | null>(null);
-  const [internalCode, setInternalCode] = useState(() => `NewFarma-${Date.now()}`);
+  const [internalCode, setInternalCode] = useState(`NewFarma-${Date.now()}`);
+
+  const normalizeList = (payload: any): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+    const candidates = [payload.list, payload.data, payload.items, payload.productos, payload.result];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+    return [];
+  };
+
+  const normalizeCatalog = (payload: any, idFields: string[], nameFields: string[]): Catalogo[] => {
+    return normalizeList(payload)
+      .map(item => ({
+        id: idFields.map(field => item?.[field]).find(value => value !== undefined && value !== null),
+        nombre: nameFields.map(field => item?.[field]).find(value => value !== undefined && value !== null) ?? ''
+      }))
+      .filter(item => item.id !== undefined && item.nombre !== '');
+  };
+
+  const getProductImageUrl = (imageName: string) => {
+    const normalizedName = imageName.replace(/^[/\\]+/, '');
+    return `${IMAGE_BASE_URL}/${encodeURIComponent(normalizedName)}`;
+  };
+
+  const getAuthHeaders = () => {
+    const currentToken = token ?? localStorage.getItem('token');
+    return currentToken ? { Authorization: `Bearer ${currentToken}` } : {};
+  };
 
   useEffect(() => {
-    fetchCatalogos();
-    fetchProducts();
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+      setSessionUser(localStorage.getItem('sessionUser'));
+      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+      fetchCatalogos(storedToken);
+      fetchProducts(storedToken);
+    }
   }, []);
 
-  const fetchCatalogos = async () => {
+  useEffect(() => {
+    const currentToken = token ?? localStorage.getItem('token');
+    if (view === 'create' && currentToken && catalogos.unidades.length === 0 && catalogos.presentaciones.length === 0 && catalogos.laboratorios.length === 0) {
+      fetchCatalogos(currentToken);
+    }
+  }, [view, token, catalogos.unidades.length, catalogos.presentaciones.length, catalogos.laboratorios.length]);
+
+  const login = async (creds: LoginCreds) => {
     try {
-      const res = await axios.get(`${API_URL}/catalogos`);
-      setCatalogos(res.data);
+      const payload = {
+        usuario: creds.usuario.trim(),
+        password: creds.password
+      };
+
+      const res = await axios.post<TokenResponse>(`${API_URL}/auth/login`, payload);
+      const t = res.data.access_token;
+      setToken(t);
+      setSessionUser(payload.usuario);
+      localStorage.setItem('token', t);
+      localStorage.setItem('sessionUser', payload.usuario);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${t}`;
+      fetchCatalogos(t);
+      fetchProducts(t);
+      alert('Login exitoso');
+    } catch (err) {
+      alert('Credenciales inválidas');
+      console.error(err);
+    }
+  };
+
+  const register = async (userData: { nombre: string; usuario: string; password: string }) => {
+    try {
+      const payload = {
+        nombreusuario: userData.usuario.trim(),
+        clave: userData.password,
+        fechacreacion: new Date().toISOString()
+      };
+
+      const res = await axios.post<TokenResponse>(`${API_URL}/auth/register`, payload);
+      const t = res.data.access_token;
+      setToken(t);
+      setSessionUser(userData.usuario.trim());
+      localStorage.setItem('token', t);
+      localStorage.setItem('sessionUser', userData.usuario.trim());
+      axios.defaults.headers.common['Authorization'] = `Bearer ${t}`;
+      fetchCatalogos(t);
+      fetchProducts(t);
+      alert('Registro exitoso');
+    } catch (err) {
+      alert('Error en el registro');
+      console.error(err);
+    }
+  };
+
+  const fetchCatalogos = async (currentToken = token) => {
+    try {
+      const headers = currentToken ? { Authorization: `Bearer ${currentToken}` } : {};
+      const [unidadesRes, presentacionesRes, laboratoriosRes] = await Promise.all([
+        axios.get(`${API_URL}/unidadmedida`, {params: { page: 1, xpage: 100 }, headers }),
+        axios.get(`${API_URL}/presentacion`, {params: { page: 1, xpage: 100 }, headers }),
+        axios.get(`${API_URL}/laboratorio`, {params: { page: 1, xpage: 100 }, headers })
+      ]);
+      setCatalogos({
+        unidades: normalizeCatalog(unidadesRes.data, ['idunidadmedida', 'id'], ['nombreunidad', 'nombre']),
+        presentaciones: normalizeCatalog(presentacionesRes.data, ['idpresentacion', 'id'], ['nombrepresentacion', 'nombre']),
+        laboratorios: normalizeCatalog(laboratoriosRes.data, ['idlaboratorio', 'id'], ['nombrelaboratorio', 'nombre'])
+      });
     } catch (err) {
       console.error('Error cargando catálogos', err);
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (currentToken = token, query: { search?: string; codbarra?: string } = {}) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/productos`);
-      setProducts(res.data);
+      const headers = currentToken ? { Authorization: `Bearer ${currentToken}` } : {};
+      const res = await axios.get(`${API_URL}/producto`, {
+        params: { page: 1, xpage: 100, ...query },
+        headers
+      });
+      setProducts(normalizeList(res.data));
     } catch (err) {
       console.error('Error cargando productos', err);
     } finally {
@@ -76,8 +227,35 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (!token || view !== 'list') return;
+
+    const timeoutId = window.setTimeout(() => {
+      const value = searchTerm.trim();
+      fetchProducts(token, value
+        ? searchMode === 'codbarra' ? { codbarra: value } : { search: value }
+        : {}
+      );
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm, searchMode, token, view]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAuthForm({ ...authForm, [e.target.name]: e.target.value });
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (authMode === 'login') {
+      await login({ usuario: authForm.usuario, password: authForm.password });
+      return;
+    }
+    await register({ nombre: authForm.nombre, usuario: authForm.usuario, password: authForm.password });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,36 +264,154 @@ function App() {
     }
   };
 
-  const filteredProducts = products.filter(product =>
-    product.nombre.toLowerCase().includes(searchTerm.trim().toLowerCase())
-  );
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const value = searchTerm.trim();
+    const currentToken = token ?? localStorage.getItem('token');
+
+    if (!currentToken) return;
+
+    if (!value) {
+      await fetchProducts(currentToken);
+      return;
+    }
+
+    await fetchProducts(currentToken, searchMode === 'codbarra'
+      ? { codbarra: value }
+      : { search: value });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     const data = new FormData();
-    Object.entries(formData).forEach(([key, value]) => data.append(key, value));
+    const producto = {
+      nombre: formData.nombre,
+      codbarra: formData.codbarra,
+      vencimiento: formData.vencimiento,
+      ubicacion: formData.ubicacion,
+      composicion: formData.composicion,
+      precioventa: Number(formData.precioventa),
+      precioblister: Number(formData.precioblister),
+      preciocaja: Number(formData.preciocaja),
+      stock: Number(formData.stock),
+      unidadmedida: formData.idunidad ? { idunidadmedida: Number(formData.idunidad) } : null,
+      presentacion: formData.idpresentacion ? { idpresentacion: Number(formData.idpresentacion) } : null,
+      laboratorio: formData.idlaboratorio ? { idlaboratorio: Number(formData.idlaboratorio) } : null
+    };
+    data.append('producto', new Blob([JSON.stringify(producto)], { type: 'application/json' }));
     if (image) data.append('imagen', image);
 
     try {
-      await axios.post(`${API_URL}/productos`, data);
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await axios.post(`${API_URL}/producto`, data, {
+        headers: { 'Content-Type': 'multipart/form-data', ...headers }
+      });
       alert('Producto registrado con éxito');
       setView('list');
-      fetchProducts();
-      setFormData({
-        nombre: '', codbarra: '', vencimiento: '', ubicacion: '',
-        idunidad: '', idpresentacion: '', idlaboratorio: '',
-        composicion: '', precioventa: '0', precioblister: '0', preciocaja: '0', stock: '0'
-      });
+      setFormData(createEmptyFormData());
       setImage(null);
       setInternalCode(`NewFarma-${Date.now()}`);
+      await Promise.all([
+        fetchProducts(token ?? localStorage.getItem('token') ?? undefined),
+        fetchCatalogos(token ?? localStorage.getItem('token') ?? undefined)
+      ]);
     } catch (err) {
       alert('Error al registrar producto');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('¿Seguro que desea eliminar este producto?')) {
+      try {
+        await axios.delete(`${API_URL}/producto/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        fetchProducts();
+        alert('Producto eliminado');
+      } catch (err) {
+        alert('Error al eliminar producto');
+        console.error(err);
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('sessionUser');
+    delete axios.defaults.headers.common['Authorization'];
+    setToken(null);
+    setSessionUser(null);
+    setProducts([]);
+    setCatalogos({ unidades: [], presentaciones: [], laboratorios: [] });
+    setView('list');
+  };
+
+  if (!token) {
+    return (
+      <div className="app">
+        <header className="header">
+          <h1>Mis Productos</h1>
+        </header>
+
+        <main className="container auth-page-shell" aria-hidden="true">
+          <div className="empty-state">Inicia sesión para consultar tus productos.</div>
+        </main>
+
+        <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+          <form onSubmit={handleAuthSubmit} className="product-form auth-dialog">
+            <div className="card form-card">
+              <div className="auth-dialog-header">
+                <div>
+                  <span className="auth-kicker">Acceso seguro</span>
+                  <h2 id="auth-title">{authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</h2>
+                </div>
+              </div>
+              {authMode === 'register' && (
+                <div className="form-group">
+                  <label>Nombre</label>
+                  <input type="text" name="nombre" className="form-control" placeholder="Tu nombre" value={authForm.nombre} onChange={handleAuthInputChange} required />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Usuario</label>
+                <input type="text" name="usuario" className="form-control" placeholder="usuario o correo" value={authForm.usuario} onChange={handleAuthInputChange} required />
+              </div>
+
+              <div className="form-group">
+                <label>Contraseña</label>
+                <input type="password" name="password" className="form-control" placeholder="••••••••" value={authForm.password} onChange={handleAuthInputChange} required />
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="btn" disabled={loading}>
+                  {loading ? 'Procesando...' : authMode === 'login' ? 'Ingresar' : 'Registrarse'}
+                </button>
+              </div>
+
+              <div className="form-group" style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setAuthMode(authMode === 'login' ? 'register' : 'login');
+                    setAuthForm({ nombre: '', usuario: '', password: '' });
+                  }}
+                >
+                  {authMode === 'login' ? 'Crear una cuenta' : 'Ya tengo cuenta'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -126,6 +422,16 @@ function App() {
           </button>
         )}
         <h1>{view === 'list' ? 'Mis Productos' : 'Crear Producto'}</h1>
+        <div className="session-controls">
+          <span className="session-user" title={`Usuario: ${sessionUser || 'actual'}`}>
+            <UserCircle size={19} />
+            <span>{sessionUser || 'Usuario'}</span>
+          </span>
+          <button className="logout-button" type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
+            <LogOut size={18} />
+            <span>Logout</span>
+          </button>
+        </div>
         {view === 'create' && (
           <button className="icon-button" type="button" onClick={() => setView('list')} aria-label="Cerrar formulario">
             <X size={22} />
@@ -136,38 +442,49 @@ function App() {
       <main className="container">
         {view === 'list' ? (
           <>
-            <div className="search-bar">
+            <form className="search-bar" onSubmit={handleSearch}>
               <label htmlFor="product-search">Buscar producto</label>
-              <input
-                id="product-search"
-                type="search"
-                placeholder="Buscar por nombre..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
+              <div className="search-controls">
+                <select
+                  aria-label="Criterio de búsqueda"
+                  value={searchMode}
+                  onChange={e => setSearchMode(e.target.value as 'nombre' | 'codbarra')}
+                >
+                  <option value="nombre">Nombre</option>
+                  <option value="codbarra">Código de barras</option>
+                </select>
+                <input
+                  id="product-search"
+                  type="search"
+                  placeholder={searchMode === 'codbarra' ? 'Ingrese código de barras...' : 'Buscar por nombre...'}
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+                <button type="submit" className="btn search-button">Buscar</button>
+              </div>
+            </form>
             <div className="product-list">
-            {loading ? <p>Cargando...</p> : filteredProducts.length === 0 ? (
-              <p className="empty-state">
-                {searchTerm ? 'No se encontraron productos con ese nombre.' : 'No hay productos registrados.'}
-              </p>
-            ) : filteredProducts.map(p => (
-              <div key={p.idproducto} className="card product-card">
-                <div className="product-image">
-                  {p.imagen_path ? (
-                    <img src={`${API_ORIGIN}/${p.imagen_path}`} alt={p.nombre} />
-                  ) : <Package size={36} />}
-                </div>
-                <div className="product-details">
-                  <h3>{p.nombre}</h3>
-                  <p>{p.nombrelaboratorio || 'Sin laboratorio'}</p>
-                  <div className="product-meta">
-                    <span className="product-price">S/ {Number(p.precioventa || 0).toFixed(2)}</span>
-                    <span className="stock">Stock: {p.stock}</span>
+              {loading ? <p>Cargando...</p> : products.length === 0 ? (
+                <p className="empty-state">
+                  {searchTerm ? 'No se encontraron productos.' : 'No hay productos registrados.'}
+                </p>
+              ) : products.map(p => (
+                <div key={p.idproducto} className="card product-card">
+                  <div className="product-image">
+                    {p.imagen_path ? (
+                      <img src={getProductImageUrl(p.imagen_path)} alt={p.nombre} />)
+                    : <Package size={36} />}
+                  </div>
+                  <div className="product-details">
+                    <h3>{p.nombre}</h3>
+                    <p>{p.nombrelaboratorio || p.laboratorio?.nombrelaboratorio || 'Sin laboratorio'}</p>
+                    <div className="product-meta">
+                      <span className="product-price">S/ {Number(p.precioventa || 0).toFixed(2)}</span>
+                      <span className="stock">Stock: {p.stock}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
             </div>
           </>
         ) : (
@@ -213,11 +530,11 @@ function App() {
                   </select>
                 </div>
                 <div className="form-group">
-                <label>Marca (Laboratorio)</label>
-                <select name="idlaboratorio" className="form-control" value={formData.idlaboratorio} onChange={handleInputChange}>
-                  <option value="">Seleccionar...</option>
-                  {catalogos.laboratorios.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                </select>
+                  <label>Marca (Laboratorio)</label>
+                  <select name="idlaboratorio" className="form-control" value={formData.idlaboratorio} onChange={handleInputChange}>
+                    <option value="">Seleccionar...</option>
+                    {catalogos.laboratorios.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                  </select>
                 </div>
               </div>
 
