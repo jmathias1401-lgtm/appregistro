@@ -224,6 +224,121 @@ textarea.form-control {
   border-radius: 0 5px 5px 0;
 }
 
+.barcode-input-wrapper {
+  align-items: center;
+  display: flex;
+  position: relative;
+  width: 100%;
+}
+
+.barcode-input-wrapper .form-control,
+.barcode-input-wrapper input {
+  padding-right: 44px;
+}
+
+.barcode-scan-btn {
+  align-items: center;
+  background: var(--soft);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--primary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: all .2s ease;
+  width: 34px;
+}
+
+.barcode-scan-btn:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.scanner-modal-backdrop {
+  align-items: center;
+  background: rgba(12, 23, 37, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 100;
+}
+
+.scanner-modal-card {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  max-width: 480px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.scanner-modal-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.scanner-modal-header h3 {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: 16px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.scanner-modal-body {
+  padding: 16px;
+  text-align: center;
+}
+
+.scanner-viewport-wrapper {
+  background: #000;
+  border-radius: 8px;
+  min-height: 250px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+#barcode-scanner-viewport {
+  width: 100%;
+}
+
+#barcode-scanner-viewport video {
+  border-radius: 8px;
+  object-fit: cover;
+  width: 100% !important;
+}
+
+.scanner-instruction {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.scanner-error {
+  background: #fff3f3;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
 .upload-area {
   border: 1px dashed #c5ced8;
   border-radius: 8px;

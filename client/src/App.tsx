@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, List, Package, X, Camera, ChevronLeft, LogOut, UserCircle } from 'lucide-react';
+import { PlusCircle, List, Package, X, Camera, ChevronLeft, LogOut, UserCircle, ScanBarcode, Pencil, Trash2 } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import axios from 'axios';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const API_URL = API_BASE_URL ? `${API_BASE_URL}/api` : '/api';
-const IMAGE_BASE_URL = (import.meta.env.VITE_IMAGE_BASE_URL || 'http://localhost:4300/assets/img/imagenes' || 'http://192.168.1.63:4300/assets/img/imagenes'||'http://192.168.1.63:3000/assets/img/imagenes').replace(/\/$/, '');
+const IMAGE_BASE_URL = (import.meta.env.VITE_IMAGE_BASE_URL || 'http://localhost:4300/assets/img/imagenes' || 'http://192.168.1.63:4300/assets/img/imagenes' || 'http://192.168.1.63:3000/assets/img/imagenes').replace(/\/$/, '');
 
 interface Catalogo {
   id: number;
@@ -17,8 +18,20 @@ interface Producto {
   codigoproducto: string;
   stock: number;
   precioventa: number;
+  precioblister?: number;
+  preciocaja?: number;
+  vencimiento?: string;
+  ubicacion?: string;
+  composicion?: string;
+  codbarra?: string;
+  estado?: string;
   nombrelaboratorio?: string;
-  laboratorio?: { nombrelaboratorio?: string };
+  idlaboratorio?: number;
+  idpresentacion?: number;
+  idunidadmedida?: number;
+  laboratorio?: { idlaboratorio?: number; nombrelaboratorio?: string };
+  presentacion?: { idpresentacion?: number; nombrepresentacion?: string; nombre?: string };
+  unidadmedida?: { idunidadmedida?: number; nombreunidad?: string; nombre?: string };
   imagen_path: string | null;
 }
 
@@ -85,7 +98,7 @@ function App() {
     presentaciones: Catalogo[],
     laboratorios: Catalogo[]
   }>({ unidades: [], presentaciones: [], laboratorios: [] });
-  
+
   const [products, setProducts] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,6 +111,104 @@ function App() {
   const [formData, setFormData] = useState<ProductFormData>(createEmptyFormData);
   const [image, setImage] = useState<File | null>(null);
   const [internalCode, setInternalCode] = useState(`NewFarma-${Date.now()}`);
+  const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+
+  const handleScanResult = (decodedText: string) => {
+    if (view === 'list') {
+      setSearchTerm(decodedText);
+    } else {
+      setFormData(prev => ({ ...prev, codbarra: decodedText }));
+    }
+    setShowBarcodeScanner(false);
+  };
+
+  useEffect(() => {
+    if (!showBarcodeScanner) {
+      setScannerError(null);
+      return;
+    }
+
+    let html5QrcodeScanner: Html5Qrcode | null = null;
+    let isMounted = true;
+
+    const initScanner = async () => {
+      try {
+        setScannerError(null);
+        html5QrcodeScanner = new Html5Qrcode("barcode-scanner-viewport");
+
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 160 },
+          aspectRatio: 1.333333
+        };
+
+        const onScanSuccess = (decodedText: string) => {
+          if (isMounted) {
+            handleScanResult(decodedText);
+          }
+        };
+
+        const onScanFailure = () => {
+          // ignore frame scan failures
+        };
+
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length > 0) {
+            const backCamera = cameras.find(c =>
+              c.label.toLowerCase().includes('back') ||
+              c.label.toLowerCase().includes('trasera') ||
+              c.label.toLowerCase().includes('posterior') ||
+              c.label.toLowerCase().includes('environment')
+            );
+            const cameraId = backCamera ? backCamera.id : cameras[0].id;
+            await html5QrcodeScanner.start(cameraId, config, onScanSuccess, onScanFailure);
+          } else {
+            await html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
+          }
+        } catch (camErr) {
+          console.warn("Fallo al obtener cámara específica, probando modo genérico:", camErr);
+          await html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
+        }
+      } catch (err: any) {
+        console.error("Error al iniciar escáner:", err);
+        if (isMounted) {
+          setScannerError("La cámara en vivo en dispositivos móviles sobre HTTP requiere un entorno seguro o dar permisos. Puedes usar la opción 'Tomar foto' a continuación.");
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      initScanner();
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      if (html5QrcodeScanner) {
+        if (html5QrcodeScanner.isScanning) {
+          html5QrcodeScanner.stop().catch(err => console.error("Error al detener scanner:", err));
+        }
+      }
+    };
+  }, [showBarcodeScanner, view]);
+
+  const handleFileScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setScannerError(null);
+      const html5Qrcode = new Html5Qrcode("barcode-scanner-viewport");
+      const decodedText = await html5Qrcode.scanFile(file, true);
+      handleScanResult(decodedText);
+    } catch (err) {
+      console.error("Error al escanear foto:", err);
+      setScannerError("No se detectó un código de barras claro en la foto. Intenta tomar la foto más cerca y enfocar bien el código.");
+    }
+  };
 
   const normalizeList = (payload: any): any[] => {
     if (Array.isArray(payload)) return payload;
@@ -197,9 +308,9 @@ function App() {
     try {
       const headers = currentToken ? { Authorization: `Bearer ${currentToken}` } : {};
       const [unidadesRes, presentacionesRes, laboratoriosRes] = await Promise.all([
-        axios.get(`${API_URL}/unidadmedida`, {params: { page: 1, xpage: 100 }, headers }),
-        axios.get(`${API_URL}/presentacion`, {params: { page: 1, xpage: 100 }, headers }),
-        axios.get(`${API_URL}/laboratorio`, {params: { page: 1, xpage: 100 }, headers })
+        axios.get(`${API_URL}/unidadmedida`, { params: { page: 1, xpage: 100 }, headers }),
+        axios.get(`${API_URL}/presentacion`, { params: { page: 1, xpage: 100 }, headers }),
+        axios.get(`${API_URL}/laboratorio`, { params: { page: 1, xpage: 100 }, headers })
       ]);
       setCatalogos({
         unidades: normalizeCatalog(unidadesRes.data, ['idunidadmedida', 'id'], ['nombreunidad', 'nombre']),
@@ -281,12 +392,56 @@ function App() {
       : { search: value });
   };
 
+  const handleStartCreate = () => {
+    setEditingProduct(null);
+    setFormData(createEmptyFormData());
+    setImage(null);
+    setInternalCode(`NewFarma-${Date.now()}`);
+    setView('create');
+  };
+
+  const handleEditProduct = (product: Producto) => {
+    setEditingProduct(product);
+
+    let formattedVencimiento = '';
+    if (product.vencimiento) {
+      if (product.vencimiento.includes('/')) {
+        const parts = product.vencimiento.split('/');
+        if (parts.length === 3) {
+          formattedVencimiento = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      } else if (product.vencimiento.includes('-')) {
+        formattedVencimiento = product.vencimiento;
+      }
+    }
+
+    setFormData({
+      nombre: product.nombre || '',
+      codbarra: product.codbarra || '',
+      vencimiento: formattedVencimiento || createEmptyFormData().vencimiento,
+      ubicacion: product.ubicacion || '',
+      idunidad: product.unidadmedida?.idunidadmedida ? String(product.unidadmedida.idunidadmedida) : (product.idunidadmedida ? String(product.idunidadmedida) : ''),
+      idpresentacion: product.presentacion?.idpresentacion ? String(product.presentacion.idpresentacion) : (product.idpresentacion ? String(product.idpresentacion) : ''),
+      idlaboratorio: product.laboratorio?.idlaboratorio ? String(product.laboratorio.idlaboratorio) : (product.idlaboratorio ? String(product.idlaboratorio) : ''),
+      composicion: product.composicion || '',
+      precioventa: String(product.precioventa ?? 0),
+      precioblister: String(product.precioblister ?? 0),
+      preciocaja: String(product.preciocaja ?? 0),
+      stock: String(product.stock ?? 0)
+    });
+    setInternalCode(product.codigoproducto || `NewFarma-${Date.now()}`);
+    setImage(null);
+    setView('create');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     const data = new FormData();
     const producto = {
+      idproducto: editingProduct ? editingProduct.idproducto : null,
+      codigoproducto: editingProduct ? editingProduct.codigoproducto : internalCode,
       nombre: formData.nombre,
       codbarra: formData.codbarra,
       vencimiento: formData.vencimiento,
@@ -296,20 +451,30 @@ function App() {
       precioblister: Number(formData.precioblister),
       preciocaja: Number(formData.preciocaja),
       stock: Number(formData.stock),
+      estado: editingProduct?.estado || '1',
+      imagen_path: image ? image.name : (editingProduct ? editingProduct.imagen_path : null),
       unidadmedida: formData.idunidad ? { idunidadmedida: Number(formData.idunidad) } : null,
       presentacion: formData.idpresentacion ? { idpresentacion: Number(formData.idpresentacion) } : null,
       laboratorio: formData.idlaboratorio ? { idlaboratorio: Number(formData.idlaboratorio) } : null
     };
-    data.append('producto', new Blob([JSON.stringify(producto)], { type: 'application/json' }));
-    if (image) data.append('imagen', image);
+
+    const productoBlob = new Blob([JSON.stringify(producto)], { type: 'application/json' });
+    data.append('producto', productoBlob);
+
+    // Se adjunta la imagen si el usuario seleccionó un nuevo archivo (con imagen)
+    // Si no hay archivo (sin imagen), no se incluye 'imagen' en FormData
+    if (image) {
+      data.append('imagen', image);
+    }
 
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       await axios.post(`${API_URL}/producto`, data, {
         headers: { 'Content-Type': 'multipart/form-data', ...headers }
       });
-      alert('Producto registrado con éxito');
+      alert(editingProduct ? 'Producto actualizado con éxito' : 'Producto registrado con éxito');
       setView('list');
+      setEditingProduct(null);
       setFormData(createEmptyFormData());
       setImage(null);
       setInternalCode(`NewFarma-${Date.now()}`);
@@ -318,7 +483,7 @@ function App() {
         fetchCatalogos(token ?? localStorage.getItem('token') ?? undefined)
       ]);
     } catch (err) {
-      alert('Error al registrar producto');
+      alert(editingProduct ? 'Error al actualizar producto' : 'Error al registrar producto');
       console.error(err);
     } finally {
       setLoading(false);
@@ -453,13 +618,36 @@ function App() {
                   <option value="nombre">Nombre</option>
                   <option value="codbarra">Código de barras</option>
                 </select>
-                <input
-                  id="product-search"
-                  type="search"
-                  placeholder={searchMode === 'codbarra' ? 'Ingrese código de barras...' : 'Buscar por nombre...'}
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
+                {searchMode === 'codbarra' ? (
+                  <div className="barcode-input-wrapper" style={{ flex: 1 }}>
+                    <input
+                      id="product-search"
+                      type="search"
+                      className="form-control"
+                      placeholder="Ingrese código de barras..."
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="barcode-scan-btn"
+                      onClick={() => setShowBarcodeScanner(true)}
+                      title="Escanear código de barras con la cámara"
+                    >
+                      <ScanBarcode size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    id="product-search"
+                    type="search"
+                    className="form-control"
+                    placeholder="Buscar por nombre..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                )}
                 <button type="submit" className="btn search-button">Buscar</button>
               </div>
             </form>
@@ -473,7 +661,7 @@ function App() {
                   <div className="product-image">
                     {p.imagen_path ? (
                       <img src={getProductImageUrl(p.imagen_path)} alt={p.nombre} />)
-                    : <Package size={36} />}
+                      : <Package size={36} />}
                   </div>
                   <div className="product-details">
                     <h3>{p.nombre}</h3>
@@ -482,6 +670,26 @@ function App() {
                       <span className="product-price">S/ {Number(p.precioventa || 0).toFixed(2)}</span>
                       <span className="stock">Stock: {p.stock}</span>
                     </div>
+                  </div>
+                  <div className="product-actions" style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => handleEditProduct(p)}
+                      title="Editar producto"
+                      style={{ color: 'var(--primary)' }}
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => handleDelete(p.idproducto)}
+                      title="Eliminar producto"
+                      style={{ color: '#dc2626' }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -498,7 +706,24 @@ function App() {
               <div className="field-grid field-grid-three">
                 <div className="form-group">
                   <label>Código de Barras</label>
-                  <input type="text" name="codbarra" className="form-control" placeholder="Escanee o escriba el código" value={formData.codbarra} onChange={handleInputChange} />
+                  <div className="barcode-input-wrapper">
+                    <input
+                      type="text"
+                      name="codbarra"
+                      className="form-control"
+                      placeholder="Escanee o escriba el código"
+                      value={formData.codbarra}
+                      onChange={handleInputChange}
+                    />
+                    <button
+                      type="button"
+                      className="barcode-scan-btn"
+                      onClick={() => setShowBarcodeScanner(true)}
+                      title="Escanear código de barras con la cámara"
+                    >
+                      <ScanBarcode size={20} />
+                    </button>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label>Código Interno</label>
@@ -549,7 +774,13 @@ function App() {
                   <input type="file" id="image-upload" onChange={handleImageChange} accept="image/*" capture="environment" />
                   <label htmlFor="image-upload">
                     <Camera size={30} />
-                    <span>{image ? image.name : 'Subir o tomar foto'}</span>
+                    <span>
+                      {image
+                        ? image.name
+                        : (editingProduct?.imagen_path
+                          ? `Imagen actual: ${editingProduct.imagen_path} (Clic para cambiar)`
+                          : 'Subir o tomar foto (opcional)')}
+                    </span>
                   </label>
                 </div>
               </div>
@@ -574,9 +805,9 @@ function App() {
               </div>
 
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setView('list')}>Cancelar</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setView('list'); setEditingProduct(null); }}>Cancelar</button>
                 <button type="submit" className="btn" disabled={loading}>
-                  {loading ? 'Guardando...' : 'Crear Producto'}
+                  {loading ? 'Guardando...' : (editingProduct ? 'Actualizar Producto' : 'Crear Producto')}
                 </button>
               </div>
             </div>
@@ -589,11 +820,60 @@ function App() {
           <List size={24} />
           <span>Listado</span>
         </button>
-        <button className={`nav-item ${view === 'create' ? 'active' : ''}`} onClick={() => setView('create')}>
+        <button className={`nav-item ${view === 'create' ? 'active' : ''}`} onClick={handleStartCreate}>
           <PlusCircle size={24} />
           <span>Registrar</span>
         </button>
       </nav>
+
+      {showBarcodeScanner && (
+        <div className="scanner-modal-backdrop" onClick={() => setShowBarcodeScanner(false)}>
+          <div className="scanner-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="scanner-modal-header">
+              <h3>
+                <ScanBarcode size={20} />
+                Escanear Código de Barras
+              </h3>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setShowBarcodeScanner(false)}
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="scanner-modal-body">
+              <div className="scanner-viewport-wrapper">
+                <div id="barcode-scanner-viewport"></div>
+              </div>
+              <p className="scanner-instruction">
+                Sitúa el código de barras frente a la cámara o toma una foto del código.
+              </p>
+
+              <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'center' }}>
+                <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', margin: 0, minHeight: '38px', padding: '6px 14px', fontSize: '13px' }}>
+                  <Camera size={18} />
+                  <span>Tomar foto o subir imagen</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileScan}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+
+              {scannerError && (
+                <div className="scanner-error">
+                  {scannerError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
