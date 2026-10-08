@@ -408,7 +408,8 @@ textarea.form-control {
 
 .product-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
 }
 
 .search-bar {
@@ -523,8 +524,10 @@ textarea.form-control {
 .product-card {
   align-items: center;
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  width: 100%;
 }
 
 .product-image {
@@ -548,13 +551,17 @@ textarea.form-control {
 .product-details {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .product-details h3 {
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.3;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
 }
 
 .product-details p {
@@ -618,7 +625,20 @@ textarea.form-control {
 
 @media (max-width: 760px) {
   .container {
-    padding: 14px 10px 92px;
+    padding: 12px 8px 92px;
+  }
+
+  .product-list {
+    gap: 8px;
+  }
+
+  .product-card {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .product-details h3 {
+    font-size: 14px;
   }
 
   .field-grid-three,
@@ -684,7 +704,190 @@ textarea.form-control {
   }
 
   .product-image {
-    flex-basis: 64px;
-    height: 64px;
+    flex: 0 0 56px;
+    height: 56px;
+    border-radius: 6px;
   }
+
+  .product-details p {
+    font-size: 12px;
+  }
+
+  .product-meta {
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+  }
+
+  .product-card .product-actions {
+    flex-direction: column;
+    gap: 2px !important;
+  }
+
+  .product-card .product-actions .icon-button {
+    min-height: 34px;
+    min-width: 34px;
+  }
+}
+
+/* SearchableSelect Component Styles */
+.searchable-select-container {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font-size: 16px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 11px;
+  transition: border-color .2s, box-shadow .2s;
+  user-select: none;
+}
+
+.searchable-select-container.open .searchable-select-trigger,
+.searchable-select-trigger:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgb(20 121 238 / 18%);
+  outline: none;
+}
+
+.searchable-select-container.disabled .searchable-select-trigger {
+  background: #e9edf1;
+  color: #4f6275;
+  cursor: not-allowed;
+}
+
+.selected-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-text.placeholder {
+  color: #75869a;
+}
+
+.trigger-actions {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+
+.clear-btn,
+.clear-search-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 2px;
+}
+
+.clear-btn:hover,
+.clear-search-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.chevron-icon {
+  color: var(--muted);
+  transition: transform .2s ease;
+}
+
+.chevron-icon.up {
+  transform: rotate(180deg);
+}
+
+.searchable-select-dropdown {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  left: 0;
+  margin-top: 4px;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+}
+
+.searchable-select-search {
+  align-items: center;
+  background: var(--soft);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.searchable-select-search .search-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.searchable-select-search input {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 14px;
+  min-height: 34px;
+  outline: none;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.searchable-select-search input:focus {
+  border-color: var(--primary);
+}
+
+.searchable-select-options {
+  list-style: none;
+  margin: 0;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.searchable-select-option {
+  align-items: center;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  justify-content: space-between;
+  padding: 8px 12px;
+  transition: background .15s, color .15s;
+}
+
+.searchable-select-option:hover {
+  background: var(--soft);
+  color: var(--primary);
+}
+
+.searchable-select-option.selected {
+  background: rgb(20 121 238 / 10%);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.searchable-select-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 12px;
+  text-align: center;
 }

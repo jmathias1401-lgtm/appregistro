@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, List, Package, X, Camera, ChevronLeft, LogOut, UserCircle, ScanBarcode, Pencil, Trash2 } from 'lucide-react';
+import { PlusCircle, List, Package, X, Camera, ChevronLeft, LogOut, UserCircle, ScanBarcode, Pencil, Trash2, CaseUpper } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import axios from 'axios';
+import { SearchableSelect } from './components/SearchableSelect';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const API_URL = API_BASE_URL ? `${API_BASE_URL}/api` : '/api';
@@ -353,7 +354,10 @@ function App() {
   }, [searchTerm, searchMode, token, view]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    const uppercaseFields = ['nombre', 'ubicacion', 'composicion'];
+    const finalValue = uppercaseFields.includes(name) ? value.toUpperCase() : value;
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
   };
 
   const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -416,14 +420,14 @@ function App() {
     }
 
     setFormData({
-      nombre: product.nombre || '',
+      nombre: product.nombre?.trim().toUpperCase() || '',
       codbarra: product.codbarra || '',
       vencimiento: formattedVencimiento || createEmptyFormData().vencimiento,
-      ubicacion: product.ubicacion || '',
+      ubicacion: product.ubicacion?.trim().toUpperCase() || '',
       idunidad: product.unidadmedida?.idunidadmedida ? String(product.unidadmedida.idunidadmedida) : (product.idunidadmedida ? String(product.idunidadmedida) : ''),
       idpresentacion: product.presentacion?.idpresentacion ? String(product.presentacion.idpresentacion) : (product.idpresentacion ? String(product.idpresentacion) : ''),
       idlaboratorio: product.laboratorio?.idlaboratorio ? String(product.laboratorio.idlaboratorio) : (product.idlaboratorio ? String(product.idlaboratorio) : ''),
-      composicion: product.composicion || '',
+      composicion: product.composicion?.trim().toUpperCase() || '',
       precioventa: String(product.precioventa ?? 0),
       precioblister: String(product.precioblister ?? 0),
       preciocaja: String(product.preciocaja ?? 0),
@@ -442,11 +446,11 @@ function App() {
     const producto = {
       idproducto: editingProduct ? editingProduct.idproducto : null,
       codigoproducto: editingProduct ? editingProduct.codigoproducto : internalCode,
-      nombre: formData.nombre,
-      codbarra: formData.codbarra,
+      nombre: (formData.nombre || '').trim().toUpperCase(),
+      codbarra: (formData.codbarra || '').trim(),
       vencimiento: formData.vencimiento,
-      ubicacion: formData.ubicacion,
-      composicion: formData.composicion,
+      ubicacion: (formData.ubicacion || '').trim().toUpperCase(),
+      composicion: (formData.composicion || '').trim().toUpperCase(),
       precioventa: Number(formData.precioventa),
       precioblister: Number(formData.precioblister),
       preciocaja: Number(formData.preciocaja),
@@ -698,10 +702,10 @@ function App() {
         ) : (
           <form onSubmit={handleSubmit} className="product-form">
             <div className="card form-card">
-              <div className="form-group">
-                <label>Nombre del Producto</label>
-                <input type="text" name="nombre" className="form-control" placeholder="Ej: Plumón Indeleble..." required value={formData.nombre} onChange={handleInputChange} />
-              </div>
+                <div className="form-group">
+                  <label>Nombre del Producto</label>
+                  <input type="text" name="nombre" className="form-control" placeholder="Ej: PLUMÓN INDELEBLE..." required value={formData.nombre} onChange={handleInputChange} style={{ textTransform: 'uppercase' }} />
+                </div>
 
               <div className="field-grid field-grid-three">
                 <div className="form-group">
@@ -738,28 +742,34 @@ function App() {
               <div className="field-grid field-grid-four">
                 <div className="form-group">
                   <label>Ubicación</label>
-                  <input type="text" name="ubicacion" className="form-control" placeholder="Ej: Almacén A-1" value={formData.ubicacion} onChange={handleInputChange} />
+                  <input type="text" name="ubicacion" className="form-control" placeholder="Ej: ALMACÉN A-1" value={formData.ubicacion} onChange={handleInputChange} style={{ textTransform: 'uppercase' }} />
                 </div>
                 <div className="form-group">
                   <label>Unidad de Medida</label>
-                  <select name="idunidad" className="form-control" value={formData.idunidad} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.unidades.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                  </select>
+                  <SearchableSelect
+                    options={catalogos.unidades}
+                    value={formData.idunidad}
+                    onChange={val => setFormData(prev => ({ ...prev, idunidad: val }))}
+                    placeholder="Seleccionar..."
+                  />
                 </div>
                 <div className="form-group">
                   <label>Presentación</label>
-                  <select name="idpresentacion" className="form-control" value={formData.idpresentacion} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.presentaciones.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
+                  <SearchableSelect
+                    options={catalogos.presentaciones}
+                    value={formData.idpresentacion}
+                    onChange={val => setFormData(prev => ({ ...prev, idpresentacion: val }))}
+                    placeholder="Seleccionar..."
+                  />
                 </div>
                 <div className="form-group">
-                  <label>Marca (Laboratorio)</label>
-                  <select name="idlaboratorio" className="form-control" value={formData.idlaboratorio} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.laboratorios.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-                  </select>
+                  <label>Marca</label>
+                  <SearchableSelect
+                    options={catalogos.laboratorios}
+                    value={formData.idlaboratorio}
+                    onChange={val => setFormData(prev => ({ ...prev, idlaboratorio: val }))}
+                    placeholder="Seleccionar..."
+                  />
                 </div>
               </div>
 
@@ -791,15 +801,15 @@ function App() {
                   <div className="money-input"><span>S/</span><input type="number" min="0" step="0.01" name="precioventa" className="form-control" value={formData.precioventa} onChange={handleInputChange} /></div>
                 </div>
                 <div className="form-group">
-                  <label>P. Blister</label>
+                  <label>P. Docena</label>
                   <div className="money-input"><span>S/</span><input type="number" min="0" step="0.01" name="precioblister" className="form-control" value={formData.precioblister} onChange={handleInputChange} /></div>
                 </div>
                 <div className="form-group">
-                  <label>P. Caja</label>
+                  <label>P. Ciento</label>
                   <div className="money-input"><span>S/</span><input type="number" min="0" step="0.01" name="preciocaja" className="form-control" value={formData.preciocaja} onChange={handleInputChange} /></div>
                 </div>
                 <div className="form-group">
-                  <label>Stock Actual</label>
+                  <label>Stock</label>
                   <input type="number" min="0" name="stock" className="form-control" value={formData.stock} onChange={handleInputChange} />
                 </div>
               </div>
